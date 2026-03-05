@@ -30,22 +30,55 @@ public class IosColorPickerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
         }
     }
 
+    private func getRootViewController() -> UIViewController? {
+        var rootViewController: UIViewController?
+        
+        if #available(iOS 13.0, *) {
+            let scenes = UIApplication.shared.connectedScenes
+            let windowScene = scenes.first { $0.activationState == .foregroundActive } as? UIWindowScene
+            let window = windowScene?.windows.first { $0.isKeyWindow }
+            rootViewController = window?.rootViewController
+        }
+        
+        if rootViewController == nil {
+            let window = UIApplication.shared.windows.first { $0.isKeyWindow }
+            rootViewController = window?.rootViewController
+        }
+        
+        if rootViewController == nil {
+            rootViewController = UIApplication.shared.delegate?.window??.rootViewController
+        }
+        
+        return rootViewController
+    }
+
     private func pickColor(defaultColor: [String: CGFloat]?, darkMode: Bool, result: @escaping FlutterResult) {
-        let colorPicker = UIColorPickerViewController()
-        colorPicker.selectedColor = defaultColor?.toUIColor() ?? .red
-        colorPicker.modalPresentationStyle = .popover
-        if darkMode {
-                UIApplication.shared.delegate?.window??.overrideUserInterfaceStyle = .dark
+        if #available(iOS 14.0, *) {
+            let colorPicker = UIColorPickerViewController()
+            colorPicker.selectedColor = defaultColor?.toUIColor() ?? .red
+            colorPicker.modalPresentationStyle = .formSheet // Better support across devices
+            
+            if darkMode {
+                colorPicker.overrideUserInterfaceStyle = .dark
+            }
 
+            colorPicker.delegate = self
+
+            guard let rootViewController = getRootViewController() else {
+                result(FlutterError(code: "NO_ROOT_VIEW_CONTROLLER", message: "Could not find root view controller", details: nil))
+                return
+            }
+            
+            var topController = rootViewController
+            while let presented = topController.presentedViewController {
+                topController = presented
+            }
+            
+            topController.present(colorPicker, animated: true, completion: nil)
+            result(nil)
+        } else {
+            result(FlutterError(code: "UNSUPPORTED_OS", message: "Color picker is only supported on iOS 14+", details: nil))
         }
-
-        colorPicker.delegate = self
-
-        if let rootViewController = UIApplication.shared.delegate?.window??.rootViewController {
-            rootViewController.present(colorPicker, animated: true, completion: nil)
-        }
-
-        result(nil)
     }
 
     // MARK: - FlutterStreamHandler
@@ -63,18 +96,23 @@ public class IosColorPickerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
 
 // MARK: - UIColorPickerViewControllerDelegate
 
+@available(iOS 14.0, *)
 extension IosColorPickerPlugin: UIColorPickerViewControllerDelegate {
-    public func colorPickerViewController(_ viewController: UIColorPickerViewController, didSelect color: UIColor) {
-       if let rgba = viewController.selectedColor.toRGBA(), let eventSink = self.eventSink {
-           eventSink(rgba)
-       }
+    
+    // iOS 15+ continuous color selection
+    @available(iOS 15.0, *)
+    public func colorPickerViewController(_ viewController: UIColorPickerViewController, didSelect color: UIColor, continuously: Bool) {
+        if let rgba = viewController.selectedColor.toRGBA(), let eventSink = self.eventSink {
+            eventSink(rgba)
+        }
     }
 
-       public func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController) {
-                if let rgba = viewController.selectedColor.toRGBA(), let eventSink = self.eventSink {
-                    eventSink(rgba)
-                }
-            }
+    // iOS 14 fallback
+    public func colorPickerViewControllerDidSelectColor(_ viewController: UIColorPickerViewController) {
+        if let rgba = viewController.selectedColor.toRGBA(), let eventSink = self.eventSink {
+            eventSink(rgba)
+        }
+    }
 }
 
 extension UIColor {
@@ -88,9 +126,9 @@ extension UIColor {
             return nil
         }
         return [
-            "red": red ,
-            "green": green ,
-            "blue": blue ,
+            "red": red,
+            "green": green,
+            "blue": blue,
             "alpha": alpha
         ]
     }
@@ -104,9 +142,9 @@ extension Dictionary where Key == String, Value == CGFloat {
         let alpha = self["alpha"] ?? 1
 
         return UIColor(
-            red: red ,
-            green: green ,
-            blue: blue ,
+            red: red,
+            green: green,
+            blue: blue,
             alpha: alpha
         )
     }
