@@ -149,15 +149,6 @@ class _HistoryColorsState extends State<HistoryColors> {
                         });
                         showTooltip();
                       },
-                      showBarrier: false,
-                      // showDropBoxFilter: true,
-                      hasShadow: false,
-                      sigmaY: 16,
-                      sigmaX: 16,
-                      arrowLength: 8,
-                      arrowTipDistance: 17,
-                      bubbleDimensions: EdgeInsets.zero,
-                      popupDirection: TooltipDirection.up,
                       controller: toolTip == (index + (pageIndex * 10))
                           ? _tipController
                           : null,
